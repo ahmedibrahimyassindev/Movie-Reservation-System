@@ -7,8 +7,16 @@
   },
   "servers": [
     {
+      "url": "/",
+      "description": "Current Host (Auto)"
+    },
+    {
+      "url": "https://movie-reservation-system-ten.vercel.app",
+      "description": "Production (Vercel)"
+    },
+    {
       "url": "http://localhost:3000",
-      "description": "Local Development Server"
+      "description": "Local Development"
     }
   ],
   "components": {

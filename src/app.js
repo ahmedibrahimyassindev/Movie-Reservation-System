@@ -12,7 +12,7 @@ const app = express();
 
 // Security and utility middlewares
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: config.corsOrigin }));
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
