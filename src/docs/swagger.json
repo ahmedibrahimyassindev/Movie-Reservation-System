@@ -1,0 +1,431 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Movie Reservation System API",
+    "version": "1.0.0",
+    "description": "Production-grade RESTful API for movie ticketing, showtime scheduling, real-time seat availability, and atomic reservations. Powered by Express, Prisma, and Neon PostgreSQL."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your JWT token obtained from `/api/auth/login`"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["USER", "ADMIN"] },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Movie": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "posterUrl": { "type": "string", "format": "uri" },
+          "genre": { "type": "string" },
+          "durationMinutes": { "type": "integer" },
+          "releaseDate": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Cinema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "location": { "type": "string" }
+        }
+      },
+      "Hall": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "cinemaId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "seatCapacity": { "type": "integer" }
+        }
+      },
+      "Showtime": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "movieId": { "type": "string", "format": "uuid" },
+          "hallId": { "type": "string", "format": "uuid" },
+          "startsAt": { "type": "string", "format": "date-time" },
+          "endsAt": { "type": "string", "format": "date-time" },
+          "ticketPrice": { "type": "number", "format": "float" }
+        }
+      },
+      "Reservation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string", "format": "uuid" },
+          "showtimeId": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["CONFIRMED", "CANCELLED"] },
+          "totalAmount": { "type": "number", "format": "float" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string" },
+          "errors": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Check API health",
+        "responses": {
+          "200": { "description": "API is operational" }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string", "example": "Alice Walker" },
+                  "email": { "type": "string", "format": "email", "example": "alice@example.com" },
+                  "password": { "type": "string", "example": "Password123!" },
+                  "role": { "type": "string", "enum": ["USER", "ADMIN"], "default": "USER" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Registered successfully" },
+          "400": { "description": "Validation failed" },
+          "409": { "description": "Email already in use" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Authenticate user and get JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "example": "john@example.com" },
+                  "password": { "type": "string", "example": "User123!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful with token" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get authenticated user profile",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Current user profile" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/movies": {
+      "get": {
+        "tags": ["Movies"],
+        "summary": "List and search movies",
+        "parameters": [
+          { "name": "genre", "in": "query", "schema": { "type": "string" }, "description": "Filter by genre" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search by title/description" }
+        ],
+        "responses": {
+          "200": { "description": "List of movies" }
+        }
+      },
+      "post": {
+        "tags": ["Movies"],
+        "summary": "Create movie (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "genre", "durationMinutes"],
+                "properties": {
+                  "title": { "type": "string", "example": "Interstellar" },
+                  "description": { "type": "string" },
+                  "posterUrl": { "type": "string" },
+                  "genre": { "type": "string", "example": "Sci-Fi" },
+                  "durationMinutes": { "type": "integer", "example": 169 },
+                  "releaseDate": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Movie created" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden - Admin only" }
+        }
+      }
+    },
+    "/api/movies/{movieId}": {
+      "get": {
+        "tags": ["Movies"],
+        "summary": "Get movie details and upcoming showtimes",
+        "parameters": [{ "name": "movieId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Movie details" },
+          "404": { "description": "Movie not found" }
+        }
+      },
+      "patch": {
+        "tags": ["Movies"],
+        "summary": "Update movie (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "movieId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Movie updated" }
+        }
+      },
+      "delete": {
+        "tags": ["Movies"],
+        "summary": "Delete movie (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "movieId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Movie deleted" }
+        }
+      }
+    },
+    "/api/cinemas": {
+      "get": {
+        "tags": ["Cinemas & Halls"],
+        "summary": "List all cinemas",
+        "responses": {
+          "200": { "description": "List of cinemas" }
+        }
+      },
+      "post": {
+        "tags": ["Cinemas & Halls"],
+        "summary": "Create cinema (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "location"],
+                "properties": {
+                  "name": { "type": "string", "example": "Grand Horizon Cinema" },
+                  "location": { "type": "string", "example": "Downtown Center, 5th Avenue" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Cinema created" }
+        }
+      }
+    },
+    "/api/cinemas/{cinemaId}/halls": {
+      "get": {
+        "tags": ["Cinemas & Halls"],
+        "summary": "List halls for a cinema",
+        "parameters": [{ "name": "cinemaId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "List of halls" }
+        }
+      },
+      "post": {
+        "tags": ["Cinemas & Halls"],
+        "summary": "Create hall and auto-generate seats (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "cinemaId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Hall 2 (Dolby Atmos)" },
+                  "rows": { "type": "integer", "default": 5 },
+                  "seatsPerRow": { "type": "integer", "default": 10 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Hall created with seats" }
+        }
+      }
+    },
+    "/api/showtimes": {
+      "get": {
+        "tags": ["Showtimes"],
+        "summary": "Query showtimes with filters",
+        "parameters": [
+          { "name": "movieId", "in": "query", "schema": { "type": "string" } },
+          { "name": "cinemaId", "in": "query", "schema": { "type": "string" } },
+          { "name": "date", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" }
+        ],
+        "responses": {
+          "200": { "description": "Filtered showtimes" }
+        }
+      },
+      "post": {
+        "tags": ["Showtimes"],
+        "summary": "Create showtime with schedule collision guard (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["movieId", "hallId", "startsAt", "ticketPrice"],
+                "properties": {
+                  "movieId": { "type": "string", "format": "uuid" },
+                  "hallId": { "type": "string", "format": "uuid" },
+                  "startsAt": { "type": "string", "format": "date-time" },
+                  "endsAt": { "type": "string", "format": "date-time", "description": "Optional: defaults to startsAt + duration + 15m buffer" },
+                  "ticketPrice": { "type": "number", "example": 15.00 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Showtime created" },
+          "400": { "description": "Schedule conflict detected" }
+        }
+      }
+    },
+    "/api/showtimes/{showtimeId}/seats": {
+      "get": {
+        "tags": ["Showtimes"],
+        "summary": "Get seat layout and real-time availability for showtime",
+        "parameters": [{ "name": "showtimeId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Seat layout and availability" }
+        }
+      }
+    },
+    "/api/reservations": {
+      "post": {
+        "tags": ["Reservations"],
+        "summary": "Atomically reserve selected seats",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["showtimeId", "seatIds"],
+                "properties": {
+                  "showtimeId": { "type": "string", "format": "uuid" },
+                  "seatIds": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Reservation confirmed" },
+          "409": { "description": "One or more seats already reserved" }
+        }
+      }
+    },
+    "/api/reservations/me": {
+      "get": {
+        "tags": ["Reservations"],
+        "summary": "List current user's reservations",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User reservations" }
+        }
+      }
+    },
+    "/api/reservations/{reservationId}/cancel": {
+      "patch": {
+        "tags": ["Reservations"],
+        "summary": "Cancel booking and release seats back to pool",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "reservationId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Reservation cancelled and seats released" }
+        }
+      }
+    },
+    "/api/admin/reports/reservations": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get system reservation summary and totals (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Reservation summary metrics" }
+        }
+      }
+    },
+    "/api/admin/reports/revenue": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get revenue report by movie and totals (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "startDate", "in": "query", "schema": { "type": "string" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Revenue aggregation" }
+        }
+      }
+    }
+  }
+}
+

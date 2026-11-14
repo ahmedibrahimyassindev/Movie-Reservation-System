@@ -1,0 +1,143 @@
+// Prisma schema for Movie Reservation System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SeatType {
+  STANDARD
+  VIP
+  ACCESSIBLE
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(USER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[]
+
+  @@map("users")
+}
+
+model Movie {
+  id              String     @id @default(uuid())
+  title           String
+  description     String?
+  posterUrl       String?
+  genre           String
+  durationMinutes Int
+  releaseDate     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  showtimes       Showtime[]
+
+  @@map("movies")
+}
+
+model Cinema {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  halls     Hall[]
+
+  @@map("cinemas")
+}
+
+model Hall {
+  id           String     @id @default(uuid())
+  cinemaId     String
+  cinema       Cinema     @relation(fields: [cinemaId], references: [id], onDelete: Cascade)
+  name         String
+  seatCapacity Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  seats        Seat[]
+  showtimes    Showtime[]
+
+  @@map("halls")
+}
+
+model Seat {
+  id               String            @id @default(uuid())
+  hallId           String
+  hall             Hall              @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  row              String
+  number           Int
+  seatType         SeatType          @default(STANDARD)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  reservationSeats ReservationSeat[]
+
+  @@unique([hallId, row, number])
+  @@map("seats")
+}
+
+model Showtime {
+  id               String            @id @default(uuid())
+  movieId          String
+  movie            Movie             @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  hallId           String
+  hall             Hall              @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  startsAt         DateTime
+  endsAt           DateTime
+  ticketPrice      Float
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  reservations     Reservation[]
+  reservationSeats ReservationSeat[]
+
+  @@map("showtimes")
+}
+
+model Reservation {
+  id          String            @id @default(uuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  showtimeId  String
+  showtime    Showtime          @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
+  status      ReservationStatus @default(CONFIRMED)
+  totalAmount Float
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  seats       ReservationSeat[]
+
+  @@map("reservations")
+}
+
+model ReservationSeat {
+  id            String            @id @default(uuid())
+  reservationId String
+  reservation   Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  showtimeId    String
+  showtime      Showtime          @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
+  seatId        String
+  seat          Seat              @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  price         Float
+  status        ReservationStatus @default(CONFIRMED)
+
+  @@index([showtimeId, seatId, status])
+  @@map("reservation_seats")
+}
+
